@@ -1,0 +1,166 @@
+# Template name: DotnetCore Cloud Native blueprint; Version: 3.0.0
+# Links for reference: https://confluence.dell.com/display/DD/v3.0.0 
+# Change the variables value as per your project requirement
+# Disclaimer: 
+# **** DevOps team recommends you to use this template to setup CICD pipelien for "Dotnetcore applications". Deviations to this template, should expect delay in response from support team.*****#
+
+
+#Variables
+variables:
+  BUILD_CSPROJ: "Temperature.Converter.API/Temperature.Converter.API.csproj"
+  BUILD_CONFIGURATION: "Release"
+  APP_NAME: cleokuhn-temperature-converter
+  TEMP_APP_NAME: cleokuhn-temperature-converter-temp
+  BROWN_APP_NAME: cleokuhn-temperature-converter-brown
+  UNIT_TEST_PROJ: Temperature.Converter.Tests/Temperature.Converter.Tests.csproj
+  INTEGRATION_TEST_FILE: DotNetCoreBluePrintIntegrationTest.csproj
+  TARGET: 'target'
+  PCF_MF_FILES: 'pcf-configs'
+
+  
+  #Sonar-scan
+  SCAN_DIR: "Temperature.Converter.Tests"
+  SONAR_PROJECT_NAME: "dotnetcore-blueprintcleokuhn-temperature-converter"
+  SONAR_LOGIN_TOKEN: "3b1d13a3636cc6167a88e083d16e91b79aac8ed3"
+  UNIT_TEST_DIR: "Temperature.Converter.Tests"
+  COVERAGE_FILE: "Temperature.Converter.Tests/coverage.opencover.xml" 
+
+  #push-artifactory
+  PACKAGE_NAME: $CI_PROJECT_NAME    
+  
+include: 
+  - project: devops/release/cloudnative/sharedjobs
+    ref: v4.0.0
+    file: cicd-stages-cloudnative.yml
+    
+  - project: devops/release/cloudnative/sharedjobs
+    ref: v4.0.0
+    file: common-jobs-cloudnative.yml
+    
+  - project: devops/release/cloudnative/sharedjobs
+    ref: v4.0.0
+    file: dotnetcore-jobs-cloudnative.yml
+    
+  - project: devops/release/cloudnative/sharedjobs
+    ref: v4.0.0
+    file: security-jobs.yml
+    
+  - project: devops/release/cloudnative/sharedjobs
+    ref: v4.0.0
+    file: release-jobs-cloudnative.yml
+
+
+compile-package:
+  extends: .compile-package
+  except:
+    - tags    
+    
+unit-test:
+  extends: .unit-test
+  only:
+    - /^([fF]eature).*$/
+
+code-quality:
+  extends: .code-quality
+  only:
+    - /^([fF]eature).*$/
+
+
+#Deploy-CI #for blue-green
+deploy-dev: 
+  extends: .deploy-np-vault
+  environment:
+    name: dev
+  variables:
+    APP_NAME: 'dotnet-blueprint-temp' 
+    PCF_MF_FILE: 'pcf-configs/manifest.DEV.yml'
+    VAULT_PCF_SPACE: "PCF/S3B"
+  only:
+    - /^([rR]elease|[dD]evelop).*$/
+  
+
+switch-route:
+  extends: .switch-route-np-vault
+  variables:
+    APP_NAME: 'dotnet-blueprint' 
+    TEMP_APP_NAME: 'dotnet-blueprint-temp' 
+    DOMAIN: $DOMAIN_SECONDARY
+    VAULT_PCF_SPACE: "PCF/S3B"
+  only:
+    - /^([rR]elease|[dD]evelop).*$/
+    
+publish-package:
+  extends: .artifactory-upload-vault
+  only:
+    - master
+    
+retrieve-artifact:
+  extends: .retrieve-artifact
+  only:
+    - tags
+
+deploy-prod-primary:
+  extends: .deploy-prod-vault
+  environment:
+    name: prod-pc1
+  variables:
+    VAULT_PCF_SPACE: "PCF/PC1-CICD"
+    MF_FILE: 'pcf-configs/manifest.prod-pc1.yml'  
+    DOMAIN: 'ausmpc01.pcf.dell.com'
+  only:
+    - tags
+
+deploy-prod-secondary:
+  extends: .deploy-prod-vault
+  environment:
+    name: prod-s3b
+  variables:
+    VAULT_PCF_SPACE: "PCF/S3B-CICD"  
+    DOMAIN: 'ausmsc01.pcf.dell.com'
+    MF_FILE: 'pcf-configs/manifest.prod-s3b.yml'
+  only:
+    - tags
+
+uat:
+  extends: .uat
+  only:
+    - tags
+
+switch-route-primary:
+  extends: .switch-route-with-rollback-vault
+  variables:
+    VAULT_PCF_SPACE: "PCF/PC1-CICD"  
+    DOMAIN: 'ausmpc01.pcf.dell.com'
+  only:
+    - tags
+
+switch-route-secondary:
+  extends: .switch-route-with-rollback-vault
+  variables:
+    VAULT_PCF_SPACE: "PCF/S3B-CICD"
+    DOMAIN: 'ausmsc01.pcf.dell.com'
+  only:
+    - tags
+
+featuretoggle-test:
+  extends: .feature-toggle-test
+  only:
+    - tags
+  
+rollback-primary:
+  variables:
+    VAULT_PCF_SPACE: "PCF/PC1-CICD"
+    DOMAIN: 'ausmpc01.pcf.dell.com'
+    SPACE: CICD
+  extends: .rollback-vault
+  only:
+    - tags
+
+rollback-secondary:
+  variables:
+    VAULT_PCF_SPACE: "PCF/S3B-CICD"
+    DOMAIN: 'ausmsc01.pcf.dell.com'
+    SPACE: CICD
+  extends: .rollback-vault
+  only:
+    - tags
