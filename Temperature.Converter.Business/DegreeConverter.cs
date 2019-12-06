@@ -4,6 +4,9 @@ namespace Calculator.Business
 {
     public class DegreeConverter
     {
+
+        public string password = "12345";
+
         public decimal ToFahrenheit(decimal celsius)
         {
             return Math.Round(((celsius * 9 / 5) + 32),2);
