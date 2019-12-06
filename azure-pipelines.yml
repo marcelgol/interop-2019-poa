@@ -34,8 +34,7 @@ steps:
   inputs:
     command: 'publish'
     publishWebProjects: true
-    arguments: '-o ./out'
+    arguments: '-o $(build.artifactstagingdirectory)/out'
     zipAfterPublish: false
     modifyOutputPath: false
-    workingDirectory: '**/Temperature.Converter.API'
 
