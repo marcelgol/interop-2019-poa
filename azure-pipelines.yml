@@ -38,3 +38,10 @@ steps:
     zipAfterPublish: false
     modifyOutputPath: false
 
+- task: Docker@2
+  inputs:
+    containerRegistry: 'marcelgol.acr.io'
+    repository: 'temperatureconverter'
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile'
+    buildContext: '$(build.artifactstagingdirectory)'
