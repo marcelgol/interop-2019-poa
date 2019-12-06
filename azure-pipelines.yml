@@ -1,0 +1,67 @@
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+trigger:
+- master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+
+steps:
+
+- task: SonarCloudPrepare@1
+  inputs:
+    SonarCloud: 'SonarCloud'
+    organization: 'marcelgol'
+    scannerMode: 'MSBuild'
+    projectKey: 'marcelgol_interop-2019-poa'
+    projectName: 'interop-2019-poa'
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'restore'
+    projects: '**/*.sln'
+    feedsToUse: 'select'
+
+- script: dotnet build --configuration $(buildConfiguration)
+  displayName: 'Build $(buildConfiguration)'
+
+- task: DotNetCoreCLI@2
+  displayName: "Unit Tests"
+  inputs:
+    command: 'test'
+    projects: '**/Temperature.Converter.Tests'
+
+- task: SonarCloudAnalyze@1
+
+- task: SonarCloudPublish@1
+  inputs:
+    pollingTimeoutSec: '300'
+
+- task: DotNetCoreCLI@2
+  displayName: "Publish"
+  inputs:
+    command: 'publish'
+    publishWebProjects: true
+    arguments: '-o $(build.artifactstagingdirectory)/out'
+    zipAfterPublish: false
+    modifyOutputPath: false
+
+- task: Docker@2
+  inputs:
+    containerRegistry: 'marcelgol.acr.io'
+    repository: 'temperatureconverter'
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile'
+    buildContext: '$(build.artifactstagingdirectory)'
+
+- task: AzureWebAppContainer@1
+  inputs:
+    azureSubscription: 'Visual Studio Professional(94211381-cbc5-4473-b790-de89414c0bfc)'
+    appName: 'interop2019-poa'
+    containers: 'marcelgol.azurecr.io/temperatureconverter:$(Build.BuildId)'
